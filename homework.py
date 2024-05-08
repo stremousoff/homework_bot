@@ -2,7 +2,6 @@ import logging
 import os
 import time
 from http import HTTPStatus
-from pprint import pprint
 
 import requests
 from dotenv import load_dotenv
@@ -106,8 +105,8 @@ def main():
                 logging.debug('Получен пустой список домашних работ')
                 continue
             status_home_work = parse_status(homeworks[0])
-            if (status_home_work != last_status and
-                    send_message(bot, status_home_work)):
+            if (status_home_work != last_status
+                    and send_message(bot, status_home_work)):
                 last_status = status_home_work
                 timestamp = response.get('current_date')
         except Exception as error:
