@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from telebot import TeleBot
 from telebot.apihelper import ApiException
 
+from exceptions import HomeworkVerdictNotFound, InvalidResponseCode
+
 load_dotenv()
 
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
@@ -46,11 +48,11 @@ def send_message(bot: TeleBot, message: str) -> bool:
     """Отправляет сообщение в Telegram чат."""
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-        logging.debug(f'Сообщение отправлено - {message}')
-        return True
     except ApiException as error:
         logging.error(f'Сбой при отправке сообщения: {error}')
         return False
+    logging.debug(f'Сообщение отправлено - {message}')
+    return True
 
 
 def get_api_answer(timestamp: int) -> dict:
@@ -60,34 +62,42 @@ def get_api_answer(timestamp: int) -> dict:
         'headers': HEADERS,
         'params': {'from_date': timestamp}
     }
-    logging.info(f'Запрос к эндпоинту: {api_params["url"]}')
+    logging.info(
+        ('Запрос к эндпоинту {url} с параметрами: {headers} и {params}'
+         .format(**api_params))
+    )
     try:
         response = requests.get(**api_params)
     except requests.RequestException as error:
-        raise f'Ошибка при запросе к API: {error}'
+        raise ConnectionError(f'Ошибка при запросе к API: {error}')
     if response.status_code != HTTPStatus.OK:
-        raise f'Получен код ответа - {response.status_code}. Ожидается 200'
+        raise InvalidResponseCode(f'Получен код ответа - '
+                                  f'{response.status_code}. Ожидается 200')
     return response.json()
 
 
-def check_response(response: dict) -> dict:
+def check_response(response: dict) -> list:
     """Проверяет ответ API на корректность."""
     if not isinstance(response, dict):
         raise TypeError('Ответ API не словарь')
     if 'homeworks' not in response:
         raise KeyError('Отсутствует ключ "homeworks"')
-    if not isinstance(response['homeworks'], list):
+    list_home_works = response.get('homeworks')
+    if not isinstance(list_home_works, list):
         raise TypeError('В ответе API нет списка домашних работ')
-    return response.get('homeworks')
+    return list_home_works
 
 
 def parse_status(homework: dict) -> str:
     """Извлекает из информации о конкретной домашней работе ее статус."""
     try:
         homework_name = homework['homework_name']
-        verdict = HOMEWORK_VERDICTS[homework.get('status')]
     except KeyError as error:
-        raise f'Неверный статус домашней работы {error}'
+        raise KeyError(f'Неверный статус домашней работы {error}')
+    verdict = HOMEWORK_VERDICTS.get(homework['status'])
+    if not verdict:
+        raise HomeworkVerdictNotFound(f'Не найден статус домашней работы'
+                                      f' {homework["status"]}')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -108,7 +118,7 @@ def main():
             if (status_home_work != last_status
                     and send_message(bot, status_home_work)):
                 last_status = status_home_work
-                timestamp = response.get('current_date')
+                timestamp = response.get('current_date', timestamp)
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logging.error(message)
@@ -121,15 +131,10 @@ def main():
 if __name__ == '__main__':
     current_file = os.path.abspath(__file__)
     log_file_path = current_file + '.log'
-    file_handler = logging.FileHandler(log_file_path)
+    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
     stream_handler = logging.StreamHandler()
     formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(message)s - %(lineno)d'
     )
-    file_handler.setFormatter(formatter)
-    stream_handler.setFormatter(formatter)
-    logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    logger.addHandler(file_handler)
-    logger.addHandler(stream_handler)
+    logging.basicConfig()
     main()
