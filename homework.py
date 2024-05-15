@@ -68,11 +68,16 @@ def get_api_answer(timestamp: int) -> dict:
     )
     try:
         response = requests.get(**api_params)
-    except requests.RequestException as error:
-        raise ConnectionError(f'Ошибка при запросе к API: {error}')
+    except requests.RequestException:
+        raise ConnectionError(
+            'Ошибка при запросе к эндпоинту {url} с параметрами: {headers} и '
+            '{params}'.format(**api_params)
+        )
     if response.status_code != HTTPStatus.OK:
-        raise InvalidResponseCode(f'Получен код ответа - '
-                                  f'{response.status_code}. Ожидается 200')
+        raise InvalidResponseCode(
+            '{response} - Ошибка при запросе к эндпоинту {url} с параметрами: '
+            '{headers} и {params}'.format(response.reason, **api_params)
+        )
     return response.json()
 
 
@@ -92,12 +97,14 @@ def parse_status(homework: dict) -> str:
     """Извлекает из информации о конкретной домашней работе ее статус."""
     try:
         homework_name = homework['homework_name']
+        status = homework['status']
     except KeyError as error:
-        raise KeyError(f'Неверный статус домашней работы {error}')
-    verdict = HOMEWORK_VERDICTS.get(homework['status'])
-    if not verdict:
-        raise HomeworkVerdictNotFound(f'Не найден статус домашней работы'
-                                      f' {homework["status"]}')
+        raise KeyError(f'В ответе API нет значения {error}')
+    if status not in HOMEWORK_VERDICTS:
+        raise HomeworkVerdictNotFound(
+            f'Неверный статус домашней работы {homework["status"]}'
+        )
+    verdict = HOMEWORK_VERDICTS.get(status)
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -129,12 +136,14 @@ def main():
 
 
 if __name__ == '__main__':
-    current_file = os.path.abspath(__file__)
-    log_file_path = current_file + '.log'
+    log_dir = os.path.dirname(os.path.abspath(__file__))
+    log_file_path = os.path.join(log_dir, 'homework.log')
     file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
     stream_handler = logging.StreamHandler()
     formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s - %(lineno)d'
+        '%(asctime)s - %(levelname)s - %(message)s - %(pathname)s - %(lineno)d'
     )
-    logging.basicConfig()
+    logging.basicConfig(handlers=[file_handler, stream_handler])
+    file_handler.setFormatter(formatter)
+    stream_handler.setFormatter(formatter)
     main()
