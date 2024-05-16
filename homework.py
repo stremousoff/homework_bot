@@ -74,10 +74,8 @@ def get_api_answer(timestamp: int) -> dict:
             '{params}'.format(**api_params)
         )
     if response.status_code != HTTPStatus.OK:
-        raise InvalidResponseCode(
-            '{response} - Ошибка при запросе к эндпоинту {url} с параметрами: '
-            '{headers} и {params}'.format(response.reason, **api_params)
-        )
+        raise InvalidResponseCode(f'Некорректный статус код: '
+                                  f'{response.reason}')
     return response.json()
 
 
@@ -110,10 +108,11 @@ def parse_status(homework: dict) -> str:
 
 def main():
     """Основная логика работы бота."""
+    logging.error('Бот запущен')
     check_tokens()
     last_status = ''
     bot = TeleBot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
+    timestamp = 1
     while True:
         try:
             response = get_api_answer(timestamp)
@@ -143,7 +142,7 @@ if __name__ == '__main__':
     formatter = logging.Formatter(
         '%(asctime)s - %(levelname)s - %(message)s - %(pathname)s - %(lineno)d'
     )
-    logging.basicConfig(handlers=[file_handler, stream_handler])
     file_handler.setFormatter(formatter)
     stream_handler.setFormatter(formatter)
+    logging.basicConfig(handlers=[file_handler, stream_handler])
     main()

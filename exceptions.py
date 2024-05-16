@@ -4,7 +4,7 @@ class InvalidResponseCode(Exception):
     pass
 
 
-class HomeworkVerdictNotFound(Exception):
+class HomeworkVerdictNotFound(ValueError):
     """Не верный статус домашней работы."""
 
     pass
